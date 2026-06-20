@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
-from TTS.api import TTS
+import pyttsx3
 import ollama
 import os
 import re
@@ -19,7 +18,7 @@ st.set_page_config(page_title="ResuAI End-to-End", layout="wide")
 # -------------------------------
 # 🌐 Configuration
 # -------------------------------
-OLLAMA_MODEL = "llama3"
+OLLAMA_MODEL = "qwen2.5:7b"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 SHORTLIST_THRESHOLD_DEFAULT = 70
 RESUME_PREVIEW_CHARS = 12000
@@ -102,17 +101,15 @@ def parse_and_shortlist(results, threshold):
 # -------------------------------
 @st.cache_resource
 def load_voice_models():
-    return (
-        WhisperModel("tiny", compute_type="int8"),
-        TTS(model_name="tts_models/en/ljspeech/vits", progress_bar=False, gpu=False)
-    )
+    return WhisperModel("tiny", compute_type="int8")
 
-whisper_model, tts_model = load_voice_models()
+whisper_model = load_voice_models()
 
 def play_audio(text):
-    audio = tts_model.tts(text=text)
-    sd.play(np.array(audio, dtype=np.float32), samplerate=22050)
-    sd.wait()
+    engine = pyttsx3.init()
+    engine.say(text)
+    engine.runAndWait()
+    engine.stop()
 
 def record_audio(duration=10, fs=16000):
     st.info("🎙 Recording...")
@@ -138,7 +135,7 @@ Reply with only "Valid Answer" if the answer is appropriate, otherwise reply wit
     
     try:
         response = ollama.chat(
-            model="llama3",
+            model="qwen2.5:7b",
             messages=[{"role": "user", "content": prompt}]
         )
         return response['message']['content'].strip()
@@ -164,7 +161,7 @@ Reason: <brief but clear explanation of strengths and concerns>
 ---
 {qas}
 """
-    out = ollama.chat(model="llama3", messages=[{"role": "user", "content": prompt}])
+    out = ollama.chat(model="qwen2.5:7b", messages=[{"role": "user", "content": prompt}])
     txt = out["message"]["content"]
     m = re.search(r"(\d{1,3})", txt)
     return (int(m.group()), txt[m.end():].strip()) if m else (0, txt)
@@ -173,7 +170,7 @@ Reason: <brief but clear explanation of strengths and concerns>
 def analyze_sentiment(all_text):
     txt = " ".join(all_text)
     prompt = f"Sentiment? Positive/Neutral/Negative.\n{txt}"
-    out = ollama.chat(model="llama3", messages=[{"role":"user","content":prompt}])
+    out = ollama.chat(model="qwen2.5:7b", messages=[{"role":"user","content":prompt}])
     s = re.search(r"(Positive|Neutral|Negative)", out["message"]["content"], re.I)
     return (s.group().capitalize(), out["message"]["content"]) if s else ("Unknown", out["message"]["content"])
 
